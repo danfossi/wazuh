@@ -11,6 +11,7 @@ from wazuh_testing.utils import configuration, database, file, services
 from wazuh_testing.constants import platforms
 from wazuh_testing.constants.daemons import WAZUH_MANAGER
 from wazuh_testing.constants.paths import ROOT_PREFIX
+from wazuh_testing.constants.paths.configurations import ACTIVE_RESPONSE_CONFIGURATION
 from wazuh_testing.constants.paths.logs import OSSEC_LOG_PATH, ALERTS_JSON_PATH
 
 
@@ -240,3 +241,22 @@ def connect_to_sockets(request):
             if e.errno == 9:
                 # Do not try to close the socket again if it was reused or closed already
                 pass
+
+
+@pytest.fixture(scope='module')
+def set_active_response_configuration(request):
+    # This fixture needs active_response_configuration to be declared.
+    if not hasattr(request, 'active_response_configuration'):
+        raise AttributeError('Error when using the fixture "set_active_response_configuration", '
+                             'the variable active_response_configuration is not defined.')
+    # Get the configuration values.
+    active_response_configuration = getattr(request.module, 'active_response_configuration')
+    # Backup the ar.conf file to restore it later.
+    backup = file.read_file_lines(ACTIVE_RESPONSE_CONFIGURATION)
+
+    file.write_file(ACTIVE_RESPONSE_CONFIGURATION, active_response_configuration)
+
+    yield
+
+    # Restore the ar.conf file.
+    file.write_file(ACTIVE_RESPONSE_CONFIGURATION, backup)

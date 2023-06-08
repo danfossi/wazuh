@@ -3367,7 +3367,158 @@ class AWSSLSubscriberBucket(WazuhIntegration):
         debug(f'{len(events_in_file)} events sent to Analysisd', 2)
 
 
-class AWSSQSQueue(WazuhIntegration):
+class AWSSQSBucket(WazuhIntegration):
+    """
+    Class for processing AWS Security Lake events from S3.
+
+    Attributes
+    ----------
+    access_key : str
+        AWS access key id.
+    secret_key : str
+        AWS secret access key.
+    aws_profile : str
+        AWS profile.
+    iam_role_arn : str
+        IAM Role.
+    """
+
+    def __init__(self, access_key: str = None, secret_key: str = None, aws_profile: str = None,
+                 service_endpoint: str = None, sts_endpoint: str = None, **kwargs):
+        WazuhIntegration.__init__(self, access_key=access_key, secret_key=secret_key, aws_profile=aws_profile,
+                                  service_name='s3', service_endpoint=service_endpoint, sts_endpoint=sts_endpoint,
+                                  **kwargs)
+
+    def fetch_logs(self, bucket_path: str, log_path: str):
+        """Fetch a parquet file from a bucket and obtain a list of the events it contains.
+
+        Parameters
+        ----------
+        bucket_path : str
+            Path of the bucket to get the parquet file from.
+        log_path : str
+            Relative path of the log file inside the bucket.
+
+        Returns
+        -------
+        events : 
+            Events contained inside the parquet file.
+        """
+        debug(f'Processing file {log_path} in {bucket_path}', 2)
+
+        try:
+            raw_log = io.BytesIO(self.client.get_object(Bucket=bucket_path, Key=log_path)['Body'].read())
+        except Exception as e:
+            debug(f'Could not get the parquet file {log_path} in {bucket_path}: {e}', 1)
+            sys.exit(21)
+
+        """
+        debug(f'Processing file {raw_log}', 3)
+        crudo = raw_log.getvalue().decode("utf-8")
+        crujson = json.dumps(crudo)
+        debug(f'El archivo normal --> {crudo} \n', 2)
+        debug(f'El archivo json --> {crujson} \n', 2)
+        """
+        return raw_log
+
+    def normalize_logs(self, raw_log: object, log_path: str):
+        """
+        AWS logs are stored in different formats depending on the service:
+        * A JSON with an unique field "Records" which is an array of jsons. The filename has .json extension. (Cloudtrail)
+        * Multiple JSONs stored in the same line and with no separation. The filename has no extension. (GuardDuty, IAM, Macie, Inspector)
+        * TSV format. The filename has no extension. Has multiple lines. (VPC)
+        :param raw_log: name of the log file
+        :
+        :return: list of events in json format.
+        """
+
+        if log_path.endswith('.gz'):
+            return self._decompress_gzip(raw_log).read()
+        elif log_path.endswith('.zip'):
+            return self._decompress_zip(raw_log).read()
+        elif log_path.endswith('.json') or log_path.endswith('.log'):
+            return raw_log.getvalue().decode("utf-8")
+        elif log_path.endswith('.jsonl.gz'):
+            return self._decompress_jsonl_gzip(raw_log).read()
+        else:
+            return io.TextIOWrapper(raw_log).read()
+
+        return 1
+
+    def process_file(self, message: dict) -> None:
+        """Parse an SQS message, obtain the events associated, and send them to Analysisd.
+        
+        Parameters
+        ----------
+        message : dict
+            An SQS message received from the queue.
+        """
+        raw_log = self.fetch_logs(bucket_path=message['bucket_path'],
+                                  log_path=message['log_path']) # We 
+        
+        formatted_log = self.normalize_logs(raw_log=raw_log, log_path=message['log_path']).getvalue().decode("utf-8")
+        debug(f'\nThe processed log --> {formatted_log} \n', 2)
+        self.send_msg(formatted_log, dump_json=False)
+
+    def _decompress_gzip(self, raw_object: io.BytesIO):
+        """
+        Method that decompress gzip compressed data.
+
+        Parameters
+        ----------
+        raw_object : io.BytesIO
+            Buffer with the gzip compressed object.
+
+        Returns
+        -------
+        file_object
+            Decompressed object.
+        """
+        try:
+            gzip_file = gzip.open(filename=raw_object, mode='rt')
+            # Ensure that the file is not corrupted by reading from it
+            gzip_file.read()
+            gzip_file.seek(0)
+            return gzip_file
+        except (gzip.BadGzipFile, zlib.error, TypeError):
+            print(f'ERROR: invalid gzip file received.')
+            if not self.skip_on_error:
+                sys.exit(8)
+
+    def _decompress_zip(self, raw_object: io.BytesIO):
+        """
+        Method that decompress zip compressed data.
+
+        Parameters
+        ----------
+        raw_object : io.BytesIO
+            Buffer with the zip compressed object.
+
+        Returns
+        -------
+        file_object
+            Decompressed object.
+        """
+        try:
+            zipfile_object = zipfile.ZipFile(raw_object, compression=zipfile.ZIP_DEFLATED)
+            return io.TextIOWrapper(zipfile_object.open(zipfile_object.namelist()[0]))
+        except zipfile.BadZipFile:
+            print('ERROR: invalid zip file received.')
+        if not self.skip_on_error:
+            sys.exit(8)
+
+    def _decompress_jsonl_gzip(self, raw_log):
+        file = self._decompress_gzip(raw_log)
+        json_list = list(file)
+        result = []
+        for json_item in json_list:
+            x = json.loads(json_item)
+            result.append(dict(x, source=x['service']['serviceName']))
+        return result
+
+
+
+class AWSNewSQSQueue(WazuhIntegration):
     """
     Class for getting AWS SQS Queue notifications.
 
@@ -3390,16 +3541,16 @@ class AWSSQSQueue(WazuhIntegration):
     """
 
     def __init__(self, name: str, iam_role_arn: str, access_key: str = None, secret_key: str = None,
-                 external_id: str = None, sts_endpoint=None, service_endpoint=None, **kwargs):
+                 external_id: str = None, sts_endpoint=None, service_endpoint=None, profile=None, **kwargs):
         self.sqs_name = name
         WazuhIntegration.__init__(self, access_key=access_key, secret_key=secret_key, iam_role_arn = iam_role_arn,
-                                  aws_profile=None, external_id=external_id, service_name='sqs', sts_endpoint=sts_endpoint,
+                                  aws_profile=profile, external_id=external_id, service_name='sqs', sts_endpoint=sts_endpoint,
                                   **kwargs)
         self.sts_client = self.get_sts_client(access_key, secret_key)
         self.account_id = self.sts_client.get_caller_identity().get('Account')
         self.sqs_url = self._get_sqs_url()
         self.iam_role_arn = iam_role_arn
-        self.asl_bucket_handler = AWSSLSubscriberBucket(external_id=external_id,
+        self.asl_bucket_handler = AWSSQSBucket(external_id=external_id,
                                                         iam_role_arn=self.iam_role_arn,
                                                         service_endpoint=service_endpoint,
                                                         sts_endpoint=sts_endpoint)
@@ -3463,15 +3614,19 @@ class AWSSQSQueue(WazuhIntegration):
         """
         messages = []
         sqs_raw_messages = self.fetch_messages()
+        debug(f'The raw message is: {sqs_raw_messages}', 2)
         sqs_messages = sqs_raw_messages.get('Messages', [])
         for mesg in sqs_messages:
             body = mesg['Body']
             msg_handle = mesg["ReceiptHandle"]
             message = json.loads(body)
-            parquet_path = message["detail"]["object"]["key"]
-            bucket_path = message["detail"]["bucket"]["name"]
-            messages.append({"parquet_path": parquet_path, "bucket_path": bucket_path,
-                             "handle": msg_handle})
+
+
+            debug(f'The message is: {message}', 2)
+            log_path = message["Records"][0]["s3"]["object"]["key"]
+            bucket_path = message["Records"][0]["s3"]["bucket"]["name"]
+            messages.append({"log_path": log_path, "bucket_path": bucket_path,
+                            "handle": msg_handle})
         return messages
 
     def sync_events(self) -> None:
@@ -3484,6 +3639,12 @@ class AWSSQSQueue(WazuhIntegration):
                 self.asl_bucket_handler.process_file(message)
                 self.delete_message(message)
             messages = self.get_messages()
+
+
+
+
+
+
 
 
 ################################################################################
@@ -3805,12 +3966,20 @@ def main(argv):
                                        )
                 service.get_alerts()
         elif options.subscriber:
-            asl_queue = AWSSQSQueue(external_id=options.external_id, iam_role_arn=options.iam_role_arn,
-                                    sts_endpoint=options.sts_endpoint,
-                                    service_endpoint=options.service_endpoint,
-                                    name=options.queue)
-            asl_queue.sync_events()
-
+            if options.subscriber.lower() == "security_lake":
+                asl_queue = AWSSQSQueue(external_id=options.external_id, iam_role_arn=options.iam_role_arn,
+                                        sts_endpoint=options.sts_endpoint,
+                                        service_endpoint=options.service_endpoint,
+                                        name=options.queue)
+                asl_queue.sync_events()
+            elif options.subscriber.lower() == "buckets":
+                asl_queue = AWSNewSQSQueue(external_id=options.external_id, iam_role_arn=options.iam_role_arn,
+                                        sts_endpoint=options.sts_endpoint,
+                                        service_endpoint=options.service_endpoint,
+                                        name=options.queue, profile=options.aws_profile)
+                asl_queue.sync_events()
+            else:
+                raise Exception("Invalid type of subscriber")
     except Exception as err:
         debug("+++ Error: {}".format(err), 2)
         if debug_level > 0:

@@ -3456,7 +3456,7 @@ class AWSSQSBucket(WazuhIntegration):
         raw_log = self.fetch_logs(bucket_path=message['bucket_path'],
                                   log_path=message['log_path']) # We 
         
-        formatted_log = self.normalize_logs(raw_log=raw_log, log_path=message['log_path']).getvalue().decode("utf-8")
+        formatted_log = self.normalize_logs(raw_log=raw_log, log_path=message['log_path'])
         debug(f'\nThe processed log --> {formatted_log} \n', 2)
         self.send_msg(formatted_log, dump_json=False)
 

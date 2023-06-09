@@ -246,7 +246,7 @@ def connect_to_sockets(request):
 @pytest.fixture(scope='module')
 def set_active_response_configuration(request):
     # This fixture needs active_response_configuration to be declared.
-    if not hasattr(request, 'active_response_configuration'):
+    if not hasattr(request.module, 'active_response_configuration'):
         raise AttributeError('Error when using the fixture "set_active_response_configuration", '
                              'the variable active_response_configuration is not defined.')
     # Get the configuration values.

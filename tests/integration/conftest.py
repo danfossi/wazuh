@@ -232,7 +232,7 @@ def daemons_handler(request: pytest.FixtureRequest) -> None:
     Args:
         request (pytest.FixtureRequest): Provide information about the current test function which made the request.
     """
-    yield from daemons_handler_impl(request)
+    yield from daemons_handler_implementation(request)
 
 
 @pytest.fixture(scope='module')

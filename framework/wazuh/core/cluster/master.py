@@ -1265,4 +1265,4 @@ class Master(server.AbstractServer):
         """
         return {'type': self.configuration['node_type'], 'cluster': self.configuration['name'],
                 'node': self.configuration['node_name']}
-    
+

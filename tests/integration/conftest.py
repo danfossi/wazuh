@@ -91,28 +91,27 @@ def pytest_collection_modifyitems(session, config, items):
 
 
 @pytest.fixture()
-def set_wazuh_configuration(configuration):
+def set_wazuh_configuration(test_configuration: dict) -> None:
     """Set wazuh configuration
-
     Args:
-        configuration (dict): Configuration template data to write in the ossec.config
+        test_configuration (dict): Configuration template data to write in the ossec.conf
     """
     # Save current configuration
-    backup_config = config.get_wazuh_conf()
+    backup_config = configuration.get_wazuh_conf()
 
     # Configuration for testing
-    test_config = config.set_section_wazuh_conf(configuration.get('sections'))
+    test_config = configuration.set_section_wazuh_conf(test_configuration.get('sections'))
 
     # Set new configuration
-    config.write_wazuh_conf(test_config)
+    configuration.write_wazuh_conf(test_config)
 
     # Set current configuration
-    session_parameters.current_configuration = configuration
+    session_parameters.current_configuration = test_config
 
     yield
 
     # Restore previous configuration
-    config.write_wazuh_conf(backup_config)
+    configuration.write_wazuh_conf(backup_config)
 
 
 @pytest.fixture()

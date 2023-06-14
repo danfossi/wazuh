@@ -7,7 +7,7 @@ import sys
 
 from wazuh_testing import session_parameters
 from wazuh_testing.tools import queue_monitor, socket_controller
-from wazuh_testing.utils import config, database, file, services
+from wazuh_testing.utils import configuration, database, file, services
 from wazuh_testing.constants import platforms
 from wazuh_testing.constants.daemons import WAZUH_MANAGER
 from wazuh_testing.constants.paths import ROOT_PREFIX

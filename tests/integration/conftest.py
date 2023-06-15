@@ -159,13 +159,13 @@ def configure_local_internal_options(request):
                                  'parameter has been passed explicitly, nor is the variable local_internal_options '
                                  'found in the module.') from AttributeError
 
-    backup_local_internal_options = config.get_local_internal_options_dict()
+    backup_local_internal_options = configuration.get_local_internal_options_dict()
 
-    config.set_local_internal_options_dict(local_internal_options)
+    configuration.set_local_internal_options_dict(local_internal_options)
 
     yield
 
-    config.set_local_internal_options_dict(backup_local_internal_options)
+    configuration.set_local_internal_options_dict(backup_local_internal_options)
 
 
 @pytest.fixture(scope='module')

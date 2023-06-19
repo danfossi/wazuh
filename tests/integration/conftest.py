@@ -243,7 +243,7 @@ def connect_to_sockets(request):
                 pass
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture()
 def set_active_response_configuration(request):
     # This fixture needs active_response_configuration to be declared.
     if not hasattr(request.module, 'active_response_configuration'):
@@ -252,11 +252,16 @@ def set_active_response_configuration(request):
     # Get the configuration values.
     active_response_configuration = getattr(request.module, 'active_response_configuration')
     # Backup the ar.conf file to restore it later.
-    backup = file.read_file_lines(ACTIVE_RESPONSE_CONFIGURATION)
-
+    ar_conf_exists = file.exists_and_is_file(ACTIVE_RESPONSE_CONFIGURATION)
+    if ar_conf_exists:
+        backup = file.read_file_lines(ACTIVE_RESPONSE_CONFIGURATION)
+    # Write new Active Response configuration.
     file.write_file(ACTIVE_RESPONSE_CONFIGURATION, active_response_configuration)
 
     yield
 
-    # Restore the ar.conf file.
-    file.write_file(ACTIVE_RESPONSE_CONFIGURATION, backup)
+    # Restore the ar.conf file previous state.
+    if ar_conf_exists:
+        file.write_file(ACTIVE_RESPONSE_CONFIGURATION, backup)
+    else:
+        file.delete_file(ACTIVE_RESPONSE_CONFIGURATION)

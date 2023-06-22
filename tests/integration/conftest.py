@@ -2,19 +2,22 @@
 # Created by Wazuh, Inc. <info@wazuh.com>.
 # This program is free software; you can redistribute it and/or modify it under the terms of GPLv2
 import os
+import subprocess
 import pytest
 import sys
+from typing import List
 
 from wazuh_testing import session_parameters
-from wazuh_testing.tools import queue_monitor, socket_controller
-from wazuh_testing.utils import configuration, database, file, services
 from wazuh_testing.constants import platforms
 from wazuh_testing.constants.daemons import WAZUH_MANAGER
 from wazuh_testing.constants.paths import ROOT_PREFIX
 from wazuh_testing.constants.paths.logs import WAZUH_LOG_PATH, ALERTS_JSON_PATH
+from wazuh_testing.logger import logger
+from wazuh_testing.tools import queue_monitor, socket_controller
+from wazuh_testing.utils import configuration, database, file, services
 
 
-###############################
+#- - - - - - - - - - - - - - - - - - - - - - - - -Pytest configuration - - - - - - - - - - - - - - - - - - - - -
 
 
 def pytest_addoption(parser):

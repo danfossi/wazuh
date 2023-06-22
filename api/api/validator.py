@@ -48,7 +48,7 @@ _search_param = re.compile(r'^[^;|&^*>]+$')
 _sort_param = re.compile(r'^[\w_\-,\s+.]+$')
 _timeframe_type = re.compile(r'^(\d+[dhms]?)$')
 _type_format = re.compile(r'^xml$|^json$')
-_wpk_path = re.compile(r'^[\w\-.\\/:\s]*[^\/]\.wpk$')
+_wpk_path = re.compile(r'^[\w\-.\\/]+(\/[\w\-.\\/]+)*\/[\w\-.]+\.[\w]+$')
 _yes_no_boolean = re.compile(r'^yes$|^no$')
 _active_response_command = re.compile(f"^!?{_paths.pattern.lstrip('^')}")
 
